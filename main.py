@@ -31,6 +31,7 @@ def get_tile(tile_x: int, tile_y: int, tilemap: int = 0):
 
 
 def detect_collision(x, y, dy):
+    global on_sticky
     x1 = x // 8
     y1 = y // 8
     x2 = (x + 7 - 1) // 8
@@ -45,6 +46,7 @@ def detect_collision(x, y, dy):
                 else:
                     on_sticky = False
                 return True
+
     if dy > 0 and y % 8 == 1:
         for xi in range(x1, x2 + 1):
             tile = get_tile(xi, y1 + 1)
@@ -154,6 +156,9 @@ class App:
         self.title = "TITRE"
         self.resources = "assets/2_edit.pyxres"
         self.respawn = [0, (32, 20)]  # [SCROLL_X, (player.x, player.y)]
+        self.death_count = 0
+        self.pause = False
+        self.setting = False
 
         self.player = Player(32, 20)
         self.has_key = False
