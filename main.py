@@ -41,6 +41,10 @@ def get_tile(tile_x: int, tile_y: int, tilemap: int = 0):
     return pyxel.tilemap(tilemap).pget(tile_x, tile_y + 16 * CURRENT_LEVEL)
 
 
+def set_tile(tile_x: int, tile_y: int, tile: tuple, tilemap: int = 0):
+    return pyxel.tilemap(tilemap).pset(tile_x, tile_y, tile)
+
+
 def detect_collision(x, y, dy):
     global on_sticky
     x1 = x // 8
@@ -51,21 +55,15 @@ def detect_collision(x, y, dy):
     for yi in range(y1, y2 + 1):
         for xi in range(x1, x2 + 1):
             tile = get_tile(xi, yi)
+            if tile in STICKY_TILES:
+                on_sticky = True
             if tile in SOLID_TILES:
-                if tile in STICKY_TILES:
-                    on_sticky = True
-                else:
-                    on_sticky = False
                 return True
 
     if dy > 0 and y % 8 == 1:
         for xi in range(x1, x2 + 1):
             tile = get_tile(xi, y1 + 1)
             if tile in SOLID_TILES:
-                if tile in STICKY_TILES:
-                    on_sticky = True
-                else:
-                    on_sticky = False
                 return True
     return False
 
@@ -103,7 +101,7 @@ class Player:
         self.jump_power = 7
 
     def update(self):
-        global SCROLL_X
+        global SCROLL_X, on_sticky
 
         last_scroll_x = SCROLL_X
         last_x = self.x
@@ -120,7 +118,7 @@ class Player:
 
         # Dplacement verticaux
         if on_sticky and (pyxel.btn(pyxel.KEY_UP) or pyxel.btn(pyxel.KEY_Z)):
-            self.dy = self.speed
+            self.dy = -self.speed
 
         # Sauts
         self.dy = min(self.dy + 1, 3)
@@ -128,6 +126,7 @@ class Player:
             self.dy = -self.jump_power
 
         # Mise à jour réelle des valeurs
+        on_sticky = False
         self.x, self.y, self.dx, self.dy = correct_distances(self.x, self.y, self.dx, self.dy)
 
         # Fixe les dépassements du cadre
@@ -290,6 +289,18 @@ class App:
 
             if self.player.y >= 100:
                 self.death()
+
+            self.get_key()
+
+            if self.on_door():
+                if self.has_key:
+                    self.has_key = False
+                    CURRENT_LEVEL += 1
+                    self.respawn = LEVELS[CURRENT_LEVEL]["respawn"]
+                    self.death()
+                    self.death_count -= 1
+                    for coords in LEVELS[CURRENT_LEVEL]['mobs']:
+                        self.mobs.append(Slime(coords[0] * 8, coords[1] * 8))
 
         if self.setting:
             self.settings()
