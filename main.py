@@ -8,6 +8,17 @@ on_sticky = False
 
 CURRENT_LEVEL = 0
 
+LEVELS = {
+    0: {
+        "respawn": [0, (32, 20)],
+        "mobs": [(19, 7), (51, 9)]
+    },
+    1: {
+        "respawn": [0, (20, 50)],
+        "mobs": [(4, 24)]
+    }
+}
+
 SOLID_TILES = [
     (0, 1), (1, 1), (2, 1), (0, 2), (1, 2),
     (2, 2), (0, 3), (1, 3), (2, 3), (0, 5),
@@ -201,7 +212,7 @@ class App:
     def __init__(self):
         self.title = "TITRE"
         self.resources = "assets/2_edit.pyxres"
-        self.respawn = [0, (32, 20)]  # [SCROLL_X, (player.x, player.y)]
+        self.respawn = LEVELS[0]["respawn"]  # [SCROLL_X, (player.x, player.y)]
         self.death_count = 0
         self.pause = False
         self.setting = False
@@ -261,6 +272,7 @@ class App:
             return True
 
     def update(self):
+        global CURRENT_LEVEL, SCROLL_X
         if not self.pause:
             self.player.update()
             for enemy in self.mobs:
@@ -302,6 +314,9 @@ class App:
             pyxel.text(55, 50, "Quit", 0)
             pyxel.rect(49, 60, 27, 9, 7)
             pyxel.text(51, 62, "Resume", 0)
+
+        if self.has_key:
+            pyxel.blt(self.player.x + self.player.direction * 10, self.player.y, 0, 88, 40, 8, 8, colkey=9)
 
 
 if __name__ == "__main__":
