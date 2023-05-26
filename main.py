@@ -2,7 +2,7 @@ import pyxel
 
 SCROLL_X = 0
 SCROLL_Y = 0
-MAX_SCROLL_X = 320
+MAX_SCROLL_X = 384
 MAX_SCROLL_Y = 0
 on_sticky = False
 
@@ -75,13 +75,16 @@ def correct_distances(x, y, dx, dy):
 
 
 class Player:
-    def __init__(self, x, y):
+    def __init__(self, x, y, app):
         self.x = x
         self.y = y
         self.dx = 0
         self.dy = 0
 
-        self.direction = 0
+        self.app = app
+
+        self.direction = -1
+        self.direction = -1
         self.is_falling = False
         self.is_running = False
 
@@ -101,7 +104,7 @@ class Player:
             self.dx = -self.speed
 
         if pyxel.btn(pyxel.KEY_RIGHT) or pyxel.btn(pyxel.KEY_D):
-            self.direction = 0
+            self.direction = -1
             self.dx = self.speed
 
         # Dplacement verticaux
@@ -117,6 +120,8 @@ class Player:
         self.x, self.y, self.dx, self.dy = correct_distances(self.x, self.y, self.dx, self.dy)
 
         # Fixe les dépassements du cadre
+        if self.y < 0:
+            self.y = 0
         if self.y > 120:
             self.y = 120
         if self.x < 0:
@@ -129,6 +134,7 @@ class Player:
             diff = min(MAX_SCROLL_X - SCROLL_X, self.x - 88)
             self.x -= diff
             SCROLL_X += diff
+            self.app.spawn_enemy(self.x, self.x + diff)
         if self.x < 40:
             diff = min(SCROLL_X, 40 - self.x)
             self.x += diff
@@ -151,6 +157,46 @@ class Player:
         pyxel.blt(self.x, self.y, 0, u, v, 8, 8, 9)
 
 
+class Slime:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.dx = 0
+        self.dy = 0
+
+        self.jump_power = 3
+
+        self.last_scroll_x = SCROLL_X
+        self.direction = 1
+        self.jumping = False
+
+    def update(self, player_x):
+        self.direction = 1 if player_x < self.x else -1
+        d_player = abs(self.x - player_x)
+        if d_player < 0:
+            self.jumping = True
+            self.dy = -self.jump_power
+            self.dx = self.direction * self.jump_power
+
+        if SCROLL_X != self.last_scroll_x:
+            self.x += self.last_scroll_x - SCROLL_X
+            self.last_scroll_x = SCROLL_X
+
+        self.x, self.y, self.dx, self.dy = correct_distances(self.x, self.y, self.dx, self.dy)
+
+    def draw(self):
+        u = 24 + 8 * (1 if pyxel.frame_count % 30 < 15 else 0)
+        v = 40 + 32 * self.direction
+        pyxel.blt(self.x, self.y, 0, u, v, 8, 8, 9)
+
+
+def flash_msg(text: str):
+    x = (128 - (len(text) * 4 - 2)) // 2
+    y = 30
+    pyxel.text(x, y + 1, text, 7)
+    pyxel.text(x, y, text, 0)
+
+
 class App:
     def __init__(self):
         self.title = "TITRE"
@@ -160,8 +206,14 @@ class App:
         self.pause = False
         self.setting = False
 
-        self.player = Player(32, 20)
+        self.player = Player(32, 20, self)
         self.has_key = False
+        self.mobs = []
+
+        for coords in LEVELS[CURRENT_LEVEL]['mobs']:
+            self.mobs.append(Slime(coords[0]*8, coords[1]*8))
+
+        self.messages = []
 
         pyxel.init(128, 128, title=self.title)
         pyxel.load(self.resources)
@@ -172,11 +224,47 @@ class App:
         self.death_count += 1
         SCROLL_X = self.respawn[0]
         x, y = self.respawn[1]
-        self.player = Player(x, y)
+        self.player = Player(x, y, self)
+
+    def spawn_enemy(self, left_x, right_x):
+        left_x = pyxel.ceil(left_x / 8)
+        right_x = pyxel.floor(right_x / 8)
+        for x in range(left_x, right_x + 1):
+            for y in range(16):
+                tile = get_tile(x, y)
+                if tile == (3, 0):
+                    self.mobs.append(Slime(x * 8 + SCROLL_X, y * 8))
+
+    def settings(self):
+        self.setting = True
+        if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
+            if 53 <= pyxel.mouse_x <= 72 and 48 <= pyxel.mouse_y <= 57:
+                pyxel.quit()
+            if 49 <= pyxel.mouse_x <= 76 and 60 <= pyxel.mouse_y <= 69:
+                self.setting = False
+                self.pause = False
+
+    @staticmethod
+    def tuto_text():
+        if SCROLL_X < 15:
+            pyxel.text(6, 20, "Appuyez sur D pour avancer", 0)
+
+    def get_key(self):
+        tile = get_tile((self.player.x + SCROLL_X) // 8, (self.player.y + SCROLL_Y) // 8)
+        if tile == (11, 5):
+            set_tile((self.player.x + SCROLL_X) // 8, (self.player.y + SCROLL_Y) // 8, (0, 0))
+            self.has_key = True
+
+    def on_door(self):
+        tile = get_tile((self.player.x + SCROLL_X) // 8, (self.player.y + SCROLL_Y) // 8)
+        if tile == (10, 6):
+            return True
 
     def update(self):
         if not self.pause:
             self.player.update()
+            for enemy in self.mobs:
+                enemy.update(self.player.x)
 
             if pyxel.btnp(pyxel.KEY_C):
                 self.death()
@@ -199,31 +287,21 @@ class App:
         pyxel.mouse(True)
 
         pyxel.bltm(0, 0, 0, SCROLL_X, SCROLL_Y + 128 * CURRENT_LEVEL, 128, 128, 9)
-        pyxel.blt(118, 2, 0, 40, 32, 8, 8, colkey=9)
+        pyxel.blt(118, 2, 0, 40, 32, 8, 8, 9)
 
         self.player.draw()
 
+        for enemy in self.mobs:
+            enemy.draw()
+
         if CURRENT_LEVEL == 0:
-            self.level_0()
+            self.tuto_text()
 
         if self.setting:
             pyxel.rect(53, 48, 19, 9, 7)
             pyxel.text(55, 50, "Quit", 0)
             pyxel.rect(49, 60, 27, 9, 7)
             pyxel.text(51, 62, "Resume", 0)
-
-    def settings(self):
-        self.setting = True
-        if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
-            if 53 <= pyxel.mouse_x <= 72 and 48 <= pyxel.mouse_y <= 57:
-                pyxel.quit()
-            if 49 <= pyxel.mouse_x <= 76 and 60 <= pyxel.mouse_y <= 69:
-                self.setting = False
-                self.pause = False
-
-    def level_0(self):
-        if SCROLL_X < 15:
-            pyxel.text(6, 20, "Appuyez sur D pour avancer", 0)
 
 
 if __name__ == "__main__":
